@@ -68,23 +68,23 @@ def create_doku_payment_link(nama_klien: str, item_deskripsi: str, nominal_rupia
             "amount": nominal_rupiah,
             "invoice_number": invoice_number,
             "currency": "IDR",
-            "session_id": str(uuid.uuid4()),
+            "line_items": [
+                {
+                    "id": "ITEM-001",
+                    "name": item_deskripsi,
+                    "price": nominal_rupiah,
+                    "quantity": 1,
+                }
+            ],
         },
         "payment": {
             "payment_due_date": 60,
         },
         "customer": {
+            "id": "PAYGENT-CUST-001",
             "name": nama_klien,
             "email": "billing@paygent.ai",
         },
-        "line_items": [
-            {
-                "id": "ITEM-001",
-                "name": item_deskripsi,
-                "price": nominal_rupiah,
-                "quantity": 1,
-            }
-        ],
     }
 
     request_id = str(uuid.uuid4())
