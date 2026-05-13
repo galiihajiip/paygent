@@ -1,28 +1,5 @@
-# Dependencies
-node_modules/
+paygent-backend/.env
+paygent-frontend/.env.local
 __pycache__/
-*.pyc
 .venv/
-venv/
-
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Build
-.next/
-out/
-dist/
-build/
-
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Misc
-*.log
+node_modules/
