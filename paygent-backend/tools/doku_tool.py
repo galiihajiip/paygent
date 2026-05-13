@@ -1,4 +1,7 @@
 import os
+import base64
+import hashlib
+import hmac
 import httpx
 import json
 import uuid
@@ -8,6 +11,45 @@ from langchain_core.tools import tool
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _build_doku_signature(
+    client_id: str,
+    secret_key: str,
+    request_id: str,
+    request_timestamp: str,
+    request_target: str,
+    body: dict,
+) -> str:
+    """Build Doku HMAC-SHA256 signature header value.
+
+    Reference: https://developers.doku.com/accept-payment/checkout/integration
+    Component format:
+        Client-Id:<client_id>
+        Request-Id:<request_id>
+        Request-Timestamp:<request_timestamp>
+        Request-Target:<request_target>
+        Digest:<base64(sha256(minified_body))>
+    """
+    body_str = json.dumps(body, separators=(",", ":"))
+    digest = base64.b64encode(hashlib.sha256(body_str.encode("utf-8")).digest()).decode("utf-8")
+
+    component = (
+        f"Client-Id:{client_id}\n"
+        f"Request-Id:{request_id}\n"
+        f"Request-Timestamp:{request_timestamp}\n"
+        f"Request-Target:{request_target}\n"
+        f"Digest:{digest}"
+    )
+
+    raw_signature = hmac.new(
+        secret_key.encode("utf-8"),
+        component.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+
+    signature_b64 = base64.b64encode(raw_signature).decode("utf-8")
+    return f"HMACSHA256={signature_b64}"
 
 
 @tool
@@ -43,17 +85,30 @@ def create_doku_payment_link(nama_klien: str, item_deskripsi: str, nominal_rupia
         ],
     }
 
+    request_id = str(uuid.uuid4())
+    request_timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    request_target = "/checkout/v1/payment"
+
+    signature = _build_doku_signature(
+        client_id=client_id,
+        secret_key=secret_key,
+        request_id=request_id,
+        request_timestamp=request_timestamp,
+        request_target=request_target,
+        body=body,
+    )
+
     headers = {
         "Client-Id": client_id,
-        "Request-Id": str(uuid.uuid4()),
-        "Request-Timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "Signature": f"HMACSHA256={secret_key}",
+        "Request-Id": request_id,
+        "Request-Timestamp": request_timestamp,
+        "Signature": signature,
         "Content-Type": "application/json",
     }
 
     try:
         response = httpx.post(
-            f"{base_url}/checkout/v1/payment",
+            f"{base_url}{request_target}",
             headers=headers,
             json=body,
             timeout=30,
