@@ -1,8 +1,8 @@
 import os
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain_core.prompts import PromptTemplate
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_core.prompts import ChatPromptTemplate
 
 from tools.doku_tool import create_doku_payment_link
 
@@ -16,33 +16,30 @@ llm = ChatGroq(
 
 tools = [create_doku_payment_link]
 
-PROMPT_TEMPLATE = """Kamu adalah PayGent, asisten keuangan AI yang proaktif dan profesional. Tugasmu adalah membantu user membuat tagihan dan payment link secara otomatis. Kamu berbicara dalam Bahasa Indonesia yang profesional namun ramah.
+SYSTEM_PROMPT = """Kamu adalah PayGent, asisten keuangan AI yang proaktif dan profesional. Tugasmu adalah membantu user membuat tagihan dan payment link secara otomatis. Kamu berbicara dalam Bahasa Indonesia yang profesional namun ramah.
 
-Kamu memiliki akses ke tools berikut:
-{tools}
+Kamu memiliki akses ke tool `create_doku_payment_link` yang membutuhkan tiga argumen:
+- nama_klien (string): nama orang atau perusahaan yang akan ditagih
+- item_deskripsi (string): deskripsi barang atau jasa yang ditagihkan
+- nominal_rupiah (integer): jumlah tagihan dalam rupiah (tanpa koma atau titik)
 
-Gunakan format berikut untuk berpikir:
-Question: pertanyaan atau permintaan dari user
-Thought: pikirkan apa yang perlu kamu lakukan
-Action: tool yang akan digunakan, harus salah satu dari [{tool_names}]
-Action Input: input untuk tool tersebut dalam format JSON yang valid
-Observation: hasil dari tool
-... (ulangi Thought/Action/Action Input/Observation jika perlu)
-Thought: Sekarang saya sudah punya jawaban finalnya
-Final Answer: [Tulis respons profesional dalam Bahasa Indonesia. Jika berhasil mendapatkan payment link, format responsnya HARUS seperti ini: "Halo [Nama Klien]! 😊 Tagihan untuk [deskripsi item] sebesar Rp [nominal diformat dengan titik ribuan] telah berhasil dibuat. Silakan lakukan pembayaran melalui link berikut: [URL payment link]. Link ini berlaku selama 60 menit. Terima kasih! 🙏"]
+Petunjuk konversi nominal:
+- "2.5 juta" atau "2,5 juta" -> 2500000
+- "750 ribu" -> 750000
+- "1 juta" -> 1000000
 
-Begin!
+Setelah tool berhasil mengembalikan URL payment link, kamu HARUS membalas user dengan format PERSIS seperti ini:
+"Halo [Nama Klien]! 😊 Tagihan untuk [deskripsi item] sebesar Rp [nominal diformat dengan titik ribuan, misal 2.500.000] telah berhasil dibuat. Silakan lakukan pembayaran melalui link berikut: [URL payment link]. Link ini berlaku selama 60 menit. Terima kasih! 🙏"
 
-Question: {input}
-Thought: {agent_scratchpad}
-"""
+Jika tool mengembalikan string yang dimulai dengan "ERROR:", jelaskan kesalahan tersebut kepada user dengan sopan dalam Bahasa Indonesia, tanpa menampilkan detail teknis yang membingungkan."""
 
-prompt_template = PromptTemplate(
-    input_variables=["input", "agent_scratchpad", "tools", "tool_names"],
-    template=PROMPT_TEMPLATE,
-)
+prompt_template = ChatPromptTemplate.from_messages([
+    ("system", SYSTEM_PROMPT),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}"),
+])
 
-agent = create_react_agent(llm=llm, tools=tools, prompt=prompt_template)
+agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt_template)
 
 agent_executor = AgentExecutor(
     agent=agent,

@@ -19,19 +19,21 @@ def _build_doku_signature(
     request_id: str,
     request_timestamp: str,
     request_target: str,
-    body: dict,
+    body_str: str,
 ) -> str:
     """Build Doku HMAC-SHA256 signature header value.
 
-    Reference: https://developers.doku.com/accept-payment/checkout/integration
-    Component format:
+    Reference: https://developers.doku.com/getting-started-with-doku-api/signature-component/non-snap/sample-code
+    Component format (newline-separated, no trailing newline):
         Client-Id:<client_id>
         Request-Id:<request_id>
         Request-Timestamp:<request_timestamp>
         Request-Target:<request_target>
-        Digest:<base64(sha256(minified_body))>
+        Digest:<base64(sha256(body_str))>
+
+    IMPORTANT: body_str must be the EXACT same string sent over the wire.
+    Any whitespace difference between digest and actual body invalidates signature.
     """
-    body_str = json.dumps(body, separators=(",", ":"))
     digest = base64.b64encode(hashlib.sha256(body_str.encode("utf-8")).digest()).decode("utf-8")
 
     component = (
@@ -89,13 +91,16 @@ def create_doku_payment_link(nama_klien: str, item_deskripsi: str, nominal_rupia
     request_timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     request_target = "/checkout/v1/payment"
 
+    # Serialize body ONCE — same exact bytes are used for digest and HTTP request.
+    body_str = json.dumps(body, separators=(",", ":"))
+
     signature = _build_doku_signature(
         client_id=client_id,
         secret_key=secret_key,
         request_id=request_id,
         request_timestamp=request_timestamp,
         request_target=request_target,
-        body=body,
+        body_str=body_str,
     )
 
     headers = {
@@ -110,7 +115,7 @@ def create_doku_payment_link(nama_klien: str, item_deskripsi: str, nominal_rupia
         response = httpx.post(
             f"{base_url}{request_target}",
             headers=headers,
-            json=body,
+            content=body_str,
             timeout=30,
         )
 
